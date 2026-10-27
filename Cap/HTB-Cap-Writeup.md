@@ -60,7 +60,7 @@ captures belonging to **other users** — an Insecure Direct Object Reference
 a capture that should not be accessible.
 
 ```bash
-http://10.129.134.236/data/1 --> http://10.129.134.236/data/0
+http://10.129.134.144/data/1 --> http://10.129.134.144/data/0
 ```
 
 ### Analysing the capture in Wireshark
