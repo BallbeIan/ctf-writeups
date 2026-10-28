@@ -109,8 +109,7 @@ admin : 05c689686a4fad5ce3ec76e7ae5708b1fe2da43a   (raw-sha1)
 
 > Cracking attempt with John (`--format=raw-sha1`, rockyou) was set up but not
 > completed — the reverse-shell path below made cracking unnecessary for the
-> foothold. First John attempt failed only due to a typo in the hash (an extra
-> character → invalid 41-char length).
+> foothold.
 
 ---
 
@@ -167,7 +166,7 @@ cat /home/asterisk/user.txt
 ```
 
 ```
-user.txt: [REDACTED — paste flag value here]
+user.txt: [REDACTED]
 ```
 
 ---
