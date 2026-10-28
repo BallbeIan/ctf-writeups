@@ -98,7 +98,7 @@ cat ~/user.txt
 ```
 
 ```
-user.txt: [REDACTED — paste flag value here]
+user.txt: [REDACTED]
 ```
 
 ---
@@ -187,7 +187,7 @@ cat /root/root.txt
 ```
 
 ```
-root.txt: [REDACTED — paste flag value here]
+root.txt: [REDACTED]
 ```
 
 ---
