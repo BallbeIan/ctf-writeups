@@ -4,7 +4,7 @@
 **Machine:** Connected
 **OS:** Linux (CentOS)
 **Difficulty:** Easy
-**Target IP:** 10.129.136.83
+**Target IP:** 10.129.136.83 (day 1) / 10.129.136.220 (day 2 — HTB IP rotation)
 **Status:** In progress — user flag obtained, privilege escalation pending
 
 ---
@@ -175,15 +175,84 @@ user.txt: [REDACTED]
 
 Shell obtained as `asterisk` (uid 999). Escalation to root not yet started.
 
-**Next steps to try:**
+### Enumeration performed (day 2)
 
 ```bash
-sudo -l                                   # asterisk often has sudo rights on PBX boxes (fwconsole/asterisk)
-getcap -r / 2>/dev/null                   # file capabilities
-find / -perm -4000 -type f 2>/dev/null    # SUID binaries
-# enumerate FreePBX/Asterisk configs for creds (e.g. /etc/amportal.conf,
-#   /etc/freepbx.conf, /etc/asterisk/*) — DB/root password reuse is common
-# check running services / cron / internal listeners; consider linpeas
+sudo -l      # no tty / no askpass — asterisk shell is non-interactive; need a PTY to test
+getcap -r / 2>/dev/null
+```
+
+```
+/usr/bin/newgidmap = cap_setgid+ep
+/usr/bin/newuidmap = cap_setuid+ep
+/usr/bin/ping = cap_net_admin,cap_net_raw+p
+/usr/sbin/arping = cap_net_raw+p
+/usr/sbin/clockdiff = cap_net_raw+p
+/usr/sbin/dumpcap = cap_net_admin,cap_net_raw+ep
+/usr/sbin/suexec = cap_setgid,cap_setuid+ep
+/usr/sbin/mtr = cap_net_raw+ep
+```
+
+```bash
+find / -perm -4000 -type f 2>/dev/null
+```
+
+```
+/usr/bin/fusermount
+/usr/bin/passwd
+/usr/bin/sudo
+/usr/bin/chfn
+/usr/bin/chsh
+/usr/bin/mount
+/usr/bin/chage
+/usr/bin/gpasswd
+/usr/bin/newgrp
+/usr/bin/su
+/usr/bin/umount
+/usr/bin/pkexec            <-- CVE-2021-4034 (PwnKit) candidate
+/usr/bin/crontab
+/usr/bin/incrontab         <-- unusual SUID
+/usr/bin/at
+/usr/bin/staprun           <-- SystemTap, unusual SUID — strong GTFOBins privesc candidate
+/usr/sbin/pam_timestamp_check
+/usr/sbin/unix_chkpwd
+/usr/sbin/usernetctl
+/usr/sbin/userhelper
+/usr/lib/polkit-1/polkit-agent-helper-1
+/usr/libexec/dbus-1/dbus-daemon-launch-helper
+/usr/libexec/abrt-action-install-debuginfo-to-abrt-cache
+```
+
+**Leads identified:**
+- `/usr/bin/staprun` SUID-root — SystemTap runner; GTFOBins has a direct
+  SUID privesc. Rare to see SUID → likely the intended path.
+- `/usr/bin/pkexec` SUID — PwnKit (CVE-2021-4034) backup path.
+- `/usr/bin/incrontab` SUID — unusual, worth a look.
+- First `sudo -l` failed with "no tty present" — the MSF/cron shell has no
+  PTY; upgrade to a proper TTY before concluding anything about sudo.
+
+**Day 2 PTY upgrade (worked):**
+```bash
+script -qc /bin/bash /dev/null    # got interactive [asterisk@connected ~]$
+export TERM=xterm
+sudo -l                            # now PROMPTS for asterisk's password → we don't have it → sudo path blocked
+```
+- Confirmed: `sudo -l` requires asterisk's password (unknown) → **sudo is a
+  dead end** unless the password is recovered.
+- Observed an unexplained item `wPXUfavlk` in asterisk's home dir alongside
+  `user.txt` — TODO: inspect (`file`/`cat`).
+
+**Primary path forward: `staprun` SUID (SystemTap).**
+```bash
+which stap staprun ; stap --version ; rpm -q systemtap systemtap-runtime
+# if stap compiler present → GTFOBins stap probe runs system() as root
+# if only staprun → load a prebuilt .ko as root
+```
+Backup: `pkexec` PwnKit (CVE-2021-4034).
+
+**Also check for reused creds:**
+```bash
+cat /etc/amportal.conf /etc/freepbx.conf 2>/dev/null; ls -la /etc/asterisk/
 ```
 
 ---
@@ -228,4 +297,10 @@ find / -perm -4000 -type f 2>/dev/null    # SUID binaries
 6. First run: cronjob planted, no session — local firewall blocked inbound 4444.
 7. Opened inbound 4444 to tun0 → reverse shell as `asterisk`.
 8. Read user flag at `/home/asterisk/user.txt`.
-9. **STOPPED HERE** — privilege escalation to root still to do.
+9. (Day 2) New IP 10.129.136.220. Enumerated caps + SUID; identified
+   `staprun`/`pkexec` leads. Upgraded to PTY; `sudo -l` now prompts for
+   asterisk's password (unknown) → sudo path blocked.
+10. **STOPPED HERE (day 2)** — next: check SystemTap tooling
+    (`which stap staprun; stap --version`), exploit `staprun` SUID via
+    GTFOBins (PwnKit fallback), and inspect the `wPXUfavlk` item in
+    asterisk's home dir.
